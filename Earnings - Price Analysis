@@ -1,0 +1,40 @@
+import numpy as np 
+import pandas as pd
+from sklearn.feature_selection import mutual_info_regression
+import seaborn as sns
+from sklearn.model_selection import train_test_split
+from sklearn.ensemble import RandomForestRegressor
+from sklearn.metrics import mean_absolute_error
+from xgboost import XGBRegressor
+
+
+AMZN = pd.read_csv("../input/amazonpricerevenuedata/AMZN Income Statement - Seeking Alpha.csv")
+AMZN.columns = ['Release Date', 'Day After', 'Price', 'Quarter', 'EPS', 'EPS Forecast', 'Revenue', 'Revenue Forecast']
+
+AMZN_X = AMZN[['Revenue', 'EPS']]
+AMZN_Y = AMZN['Price']
+for index in AMZN_X.index:
+    AMZN_X.loc[index, 'Revenue'] = AMZN_X.loc[index, 'Revenue'].replace('B', '')
+    AMZN_X.loc[index, 'Revenue'] = AMZN_X.loc[index, 'Revenue'].replace('--', '0')
+    AMZN_Y[index] = AMZN_Y[index].replace('$', '')
+    AMZN_Y[index] = AMZN_Y[index].replace(',', '')
+    AMZN_Y[index] = float(AMZN_Y[index])
+
+AMZN_X['Revenue'] = AMZN_X['Revenue'].astype(float)
+AMZN_X['EPS'] = AMZN_X['EPS'].astype(float)
+AMZN_Y = AMZN_Y.astype(float)
+
+X_train, X_val, y_train, y_val = train_test_split(AMZN_X, AMZN_Y, random_state = 0)
+
+my_model = XGBRegressor(n_estimators = 500, learning_rate = 0.1)
+my_model.fit(X_train, y_train, early_stopping_rounds = 5, eval_set = [(X_val, y_val)], verbose = False)
+val_prediction = my_model.predict(AMZN_X)
+print('$',mean_absolute_error(val_prediction, AMZN_Y))
+print(mean_absolute_error(val_prediction, AMZN_Y) / AMZN_Y.mean() * 100, '%')
+XGB_Error = mean_absolute_error(val_prediction, AMZN_Y)
+
+produced = pd.DataFrame(val_prediction)
+
+next_earnings = my_model.predict(pd.DataFrame([['111.95', '9.13']], columns = ['Revenue', 'EPS']))
+print('$', next_earnings[0])
+print(f'The error is {XGB_Error:}. The price range is from ${next_earnings[0] - XGB_Error:,.2f} to ${next_earnings[0] + XGB_Error:,.2f}')
